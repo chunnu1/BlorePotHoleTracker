@@ -7,7 +7,12 @@ from app.routers import potholes, admin
 app = FastAPI()
 
 # Run initialization
-init_db()
+try:
+    init_db()
+    print("Database initialized successfully.")
+except Exception as e:
+    print(f"Error during database initialization: {e}")
+    # Don't crash here, let the app start so we can see logs
 
 # Include Routers
 app.include_router(potholes.router)
