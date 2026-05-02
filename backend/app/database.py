@@ -1,20 +1,20 @@
 import os
 import psycopg2
 import psycopg2.extras
-from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_db_connection():
-    # Use environment variables for connection
-    db_user = os.getenv("DB_USER", "postgres")
-    db_pass = os.getenv("DB_PASS", "postgres")
+    db_user = os.getenv("DB_USER")
+    db_pass = os.getenv("DB_PASS")
     db_name = os.getenv("DB_NAME", "potholes")
-    db_host = os.getenv("DB_HOST", "localhost") # Default to localhost for local dev if needed
-    
-    # If running on Cloud Run, use the Cloud SQL unix socket
     instance_connection_name = os.getenv("INSTANCE_CONNECTION_NAME")
-    
-    if instance_connection_name:
-        # Cloud SQL Unix Socket connection
+    db_host = os.getenv("DB_HOST", "localhost")
+
+    # If running on Cloud Run, use the Unix socket
+    if os.getenv("K_SERVICE"):
+        # Connect using the Unix socket provided by Cloud SQL Auth Proxy
         conn = psycopg2.connect(
             user=db_user,
             password=db_pass,
@@ -37,9 +37,16 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Log connection info
+    print(f"Initializing database: {conn.dsn}")
+    
     # Ensure PostGIS is enabled
     cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
     
+    # Force recreation for troubleshooting (CAUTION: deletes data)
+    # cursor.execute("DROP TABLE IF EXISTS potholes;")
+    # cursor.execute("DROP TABLE IF EXISTS admin;")
+
     # Create potholes table with PostGIS geography type
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS potholes (
@@ -66,11 +73,5 @@ def init_db():
         )
     ''')
     
-    cursor.execute("SELECT COUNT(*) FROM admin")
-    if cursor.fetchone()[0] == 0:
-        import hashlib
-        default_hash = hashlib.sha256("admin123".encode()).hexdigest()
-        cursor.execute("INSERT INTO admin (password_hash) VALUES (%s)", (default_hash,))
-
     conn.commit()
     conn.close()
