@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Pothole Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div id="loginScreen" class="flex items-center justify-center min-h-screen">
+        <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-gray-700">
+            <h1 class="text-2xl font-bold mb-6 text-center">Admin Login</h1>
+            <input type="password" id="adminPassword" placeholder="Password" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-red-500">
+            <button id="btnLogin" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-colors">Login</button>
+        </div>
+    </div>
+
+    <div id="dashboardScreen" class="hidden">
+        <header class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+            <h1 class="text-xl font-bold">Pothole Tracker Admin</h1>
+            <div class="flex gap-4">
+                <button id="btnOpenChangePassword" class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg">Change Password</button>
+                <button id="btnLogout" class="text-sm bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg">Logout</button>
+            </div>
+        </header>
+
+        <main class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="reportsGrid">
+                <!-- Cards will be injected here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 class="text-xl font-bold mb-4">Change Password</h3>
+            <input type="password" id="newPassword" placeholder="New Password" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-red-500">
+            <div class="flex gap-3 mt-4">
+                <button id="btnCancelChange" class="flex-1 bg-gray-800 hover:bg-gray-700 py-2.5 rounded-xl">Cancel</button>
+                <button id="btnSavePassword" class="flex-1 bg-red-600 hover:bg-red-700 font-bold py-2.5 rounded-xl">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl font-medium text-sm transition-all duration-300 translate-y-20 opacity-0 z-50 pointer-events-none"></div>
+
+    <script src="/js/admin.js"></script>
+</body>
+</html>
