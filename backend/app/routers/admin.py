@@ -22,10 +22,11 @@ def admin_login(data: LoginData):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT password_hash FROM admin LIMIT 1")
-    stored_hash = cursor.fetchone()['password_hash']
+    row = cursor.fetchone()
+    stored_hash = row[0] if row else None
     conn.close()
     
-    if get_password_hash(data.password) == stored_hash:
+    if stored_hash and get_password_hash(data.password) == stored_hash:
         token = secrets.token_hex(16)
         admin_tokens.add(token)
         return {"token": token}
@@ -37,7 +38,7 @@ def admin_change_password(data: ChangePasswordData, token: Optional[str] = Heade
     new_hash = get_password_hash(data.new_password)
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE admin SET password_hash = ?", (new_hash,))
+    cursor.execute("UPDATE admin SET password_hash = %s", (new_hash,))
     conn.commit()
     conn.close()
     return {"status": "success"}
@@ -52,7 +53,7 @@ def admin_delete_pothole(pothole_id: int, token: Optional[str] = Header(None)):
     check_admin_token(token)
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM potholes WHERE id = ?", (pothole_id,))
+    cursor.execute("DELETE FROM potholes WHERE id = %s", (pothole_id,))
     conn.commit()
     conn.close()
     return {"status": "deleted"}

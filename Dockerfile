@@ -2,10 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install spatialite and sqlite3
+# Install system dependencies (libpq-dev is useful for psycopg2)
 RUN apt-get update && apt-get install -y \
-    libsqlite3-mod-spatialite \
-    sqlite3 \
+    libpq-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
@@ -18,7 +18,6 @@ COPY frontend ./frontend
 
 # Set environment variables
 ENV PORT=8080
-ENV SPATIALITE_EXTENSION=mod_spatialite
 ENV PYTHONPATH=/app/backend
 
 # Expose port

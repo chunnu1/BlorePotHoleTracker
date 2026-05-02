@@ -12,7 +12,7 @@ def get_potholes():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT id, taluk, reports_count, X(location) as lng, Y(location) as lat, image_data, mla, mp, mla_photo_url, mp_photo_url
+        SELECT id, taluk, reports_count, ST_X(location::geometry) as lng, ST_Y(location::geometry) as lat, image_data, mla, mp, mla_photo_url, mp_photo_url
         FROM potholes
     ''')
     rows = cursor.fetchall()
@@ -48,14 +48,12 @@ def report_pothole(report: PotholeReport, request: Request):
     cursor = conn.cursor()
     
     try:
-        # Check for existing reports within ~10 meters (approx 0.0001 degrees)
-        # We will use spatialite distance function. Distance is in degrees here, very rough approximation.
-        # ST_Distance(location, MakePoint(lng, lat)) < 0.0001
-        
+        # Check for existing reports within 10 meters
+        # PostGIS ST_DWithin with geography uses meters.
         cursor.execute('''
             SELECT id, image_data, reports_count 
             FROM potholes 
-            WHERE ST_Distance(location, MakePoint(?, ?, 4326)) < 0.0001
+            WHERE ST_DWithin(location, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, 10)
             LIMIT 1
         ''', (report.lng, report.lat))
         
@@ -74,8 +72,8 @@ def report_pothole(report: PotholeReport, request: Request):
             
             cursor.execute('''
                 UPDATE potholes 
-                SET reports_count = ?, image_data = ?
-                WHERE id = ?
+                SET reports_count = %s, image_data = %s
+                WHERE id = %s
             ''', (reports_count, updated_image_data, existing_id))
             conn.commit()
             return {"status": "success", "message": "Merged with existing report", "id": existing_id}
@@ -85,8 +83,7 @@ def report_pothole(report: PotholeReport, request: Request):
             images = [report.image_data] if report.image_data else []
             image_data_json = json.dumps(images)
             
-            # Temporary static assignment, since we don't have geospatial bounds mapping for wards.
-            # In a real system, we'd query a wards table with ST_Contains.
+            # Temporary static assignment
             mla_name = "Dr. C.N. Ashwath Narayan"
             mp_name = "Tejasvi Surya"
             mla_photo_url = "https://ui-avatars.com/api/?name=Ashwath+Narayan&background=random"
@@ -94,10 +91,12 @@ def report_pothole(report: PotholeReport, request: Request):
             
             cursor.execute('''
                 INSERT INTO potholes (taluk, location, image_data, mla, mp, mla_photo_url, mp_photo_url)
-                VALUES ('Bengaluru City', MakePoint(?, ?, 4326), ?, ?, ?, ?, ?)
+                VALUES ('Bengaluru City', ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (report.lng, report.lat, image_data_json, mla_name, mp_name, mla_photo_url, mp_photo_url))
+            new_id = cursor.fetchone()[0]
             conn.commit()
-            return {"status": "success", "id": cursor.lastrowid}
+            return {"status": "success", "id": new_id}
             
     except Exception as e:
         if isinstance(e, HTTPException):
@@ -111,17 +110,17 @@ def delete_pothole(pothole_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT reports_count FROM potholes WHERE id = ?", (pothole_id,))
+        cursor.execute("SELECT reports_count FROM potholes WHERE id = %s", (pothole_id,))
         existing = cursor.fetchone()
         
         if existing:
             if existing['reports_count'] > 1:
                 new_count = existing['reports_count'] - 1
-                cursor.execute("UPDATE potholes SET reports_count = ? WHERE id = ?", (new_count, pothole_id))
+                cursor.execute("UPDATE potholes SET reports_count = %s WHERE id = %s", (new_count, pothole_id))
                 conn.commit()
                 return {"status": "decremented", "id": pothole_id, "reports_count": new_count}
             else:
-                cursor.execute("DELETE FROM potholes WHERE id = ?", (pothole_id,))
+                cursor.execute("DELETE FROM potholes WHERE id = %s", (pothole_id,))
                 conn.commit()
                 return {"status": "deleted", "id": pothole_id, "reports_count": 0}
         else:

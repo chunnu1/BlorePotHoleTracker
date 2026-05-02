@@ -1,62 +1,76 @@
-import sqlite3
-import sys
-
-DB_FILE = "potholes.sqlite"
+import os
+import psycopg2
+import psycopg2.extras
+from typing import Optional
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    conn.enable_load_extension(True)
-    try:
-        if sys.platform == 'win32':
-            conn.load_extension('mod_spatialite')
-        elif sys.platform == 'darwin':
-            conn.load_extension('mod_spatialite.dylib')
-        else:
-            conn.load_extension('mod_spatialite.so')
-    except sqlite3.OperationalError as e:
-        print(f"Warning: Could not load spatialite extension: {e}")
-        print("Make sure mod_spatialite is installed on your system.")
+    # Use environment variables for connection
+    db_user = os.getenv("DB_USER", "postgres")
+    db_pass = os.getenv("DB_PASS", "postgres")
+    db_name = os.getenv("DB_NAME", "potholes")
+    db_host = os.getenv("DB_HOST", "localhost") # Default to localhost for local dev if needed
+    
+    # If running on Cloud Run, use the Cloud SQL unix socket
+    instance_connection_name = os.getenv("INSTANCE_CONNECTION_NAME")
+    
+    if instance_connection_name:
+        # Cloud SQL Unix Socket connection
+        conn = psycopg2.connect(
+            user=db_user,
+            password=db_pass,
+            dbname=db_name,
+            host=f"/cloudsql/{instance_connection_name}",
+            cursor_factory=psycopg2.extras.DictCursor
+        )
+    else:
+        # Standard TCP connection
+        conn = psycopg2.connect(
+            user=db_user,
+            password=db_pass,
+            dbname=db_name,
+            host=db_host,
+            cursor_factory=psycopg2.extras.DictCursor
+        )
     return conn
 
-# Database initialization logic
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT InitSpatialMetaData(1);")
     
+    # Ensure PostGIS is enabled
+    cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+    
+    # Create potholes table with PostGIS geography type
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS potholes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             taluk TEXT,
             reports_count INTEGER DEFAULT 1,
             image_data TEXT,
             mla TEXT,
             mp TEXT,
             mla_photo_url TEXT,
-            mp_photo_url TEXT
+            mp_photo_url TEXT,
+            location GEOGRAPHY(Point, 4326)
         )
     ''')
     
-    cursor.execute("SELECT CheckSpatialMetaData();")
+    # Create spatial index
+    cursor.execute("CREATE INDEX IF NOT EXISTS potholes_location_idx ON potholes USING GIST (location);")
     
-    try:
-        cursor.execute("SELECT AddGeometryColumn('potholes', 'location', 4326, 'POINT', 'XY');")
-        cursor.execute("SELECT CreateSpatialIndex('potholes', 'location');")
-    except sqlite3.OperationalError:
-        pass
-    
+    # Create admin table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS admin (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             password_hash TEXT
         )
     ''')
-    cursor.execute("SELECT COUNT(*) as count FROM admin")
-    if cursor.fetchone()['count'] == 0:
+    
+    cursor.execute("SELECT COUNT(*) FROM admin")
+    if cursor.fetchone()[0] == 0:
         import hashlib
         default_hash = hashlib.sha256("admin123".encode()).hexdigest()
-        cursor.execute("INSERT INTO admin (password_hash) VALUES (?)", (default_hash,))
+        cursor.execute("INSERT INTO admin (password_hash) VALUES (%s)", (default_hash,))
 
     conn.commit()
     conn.close()
